@@ -12,13 +12,13 @@
 
 **Parnassus Hackathon · Snowflake x Anthropic**
 
-[🧭 For everyone](#-for-everyone-what-we-built) · [🗺️ User flow](#️-user-flow) · [📊 Results](#-results-at-a-glance) · [✅ Evals](#-evaluations) · [📁 Repo layout](#-repository-layout-and-run-order)
+[🧭 What we built](#-what-we-built) · [🗺️ User flow](#️-user-flow) · [📊 Results](#-results-at-a-glance) · [✅ Evals](#-evaluations) · [📁 Repo layout](#-repository-layout-and-run-order)
 
 </div>
 
 ---
 
-## 🧭 For everyone: what we built
+## 🧭 What we built
 
 ### 😟 The problem
 
