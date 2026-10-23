@@ -12,7 +12,7 @@
 
 **Parnassus Hackathon · Snowflake x Anthropic**
 
-[🧭 For everyone](#-for-everyone-what-we-built) · [🗺️ User flow](#️-user-flow) · [📊 Results](#-results-at-a-glance) · [🛠️ For engineers](#️-for-engineers-how-its-built) · [✅ Evals](#-evaluations) · [📁 Repo layout](#-repository-layout-and-run-order)
+[🧭 For everyone](#-for-everyone-what-we-built) · [🗺️ User flow](#️-user-flow) · [📊 Results](#-results-at-a-glance) · [✅ Evals](#-evaluations) · [📁 Repo layout](#-repository-layout-and-run-order)
 
 </div>
 
@@ -83,9 +83,8 @@ flowchart LR
     classDef live fill:#00B894,stroke:#00866B,color:#fff
 ```
 
-The app's six tabs and the agent's tools are listed in [What you can do with it](#-what-you-can-do-with-it)
-and [For engineers](#️-for-engineers-how-its-built). Questions that try to identify a company or ask for a buy
-or sell call get a polite refusal.
+The app's six tabs are listed in [What you can do with it](#-what-you-can-do-with-it). Questions that try to
+identify a company or ask for a buy or sell call get a polite refusal.
 
 ---
 
@@ -302,137 +301,6 @@ holding.
 | 📚 | Learning loop, FY+1 mean absolute error (Opus 4.6) | **2.05% → 1.67%**, 3 wins, 0 losses, 2 ties; run-to-run noise 0.04 pts |
 | 📘 | Live playbook | **19 active rules**: 15 say raise, 3 lower, 1 widen the range |
 | 🚦 | Live case FY+1 growth | Claude raw **9.3%** → with playbook **9.8%** · consensus **9.1%** · analyst **12.9%** |
-
----
-
-## 🛠️ For engineers: how it's built
-
-### 🏗️ Architecture
-
-```mermaid
-flowchart TB
-    subgraph SRC["📥 Sources (outside this repo)"]
-        PDF["Investment reviews, filings,<br/>transcripts, broker notes"]
-        FS["FactSet consensus,<br/>guidance, revenue history"]
-    end
-
-    subgraph DB["❄️ Snowflake database POSTMORTEM"]
-        direction TB
-        RAW[("RAW<br/>real names · never leaves the firm<br/>(empty here)")]:::raw
-        MASKED[("MASKED<br/>what the forecaster may see")]:::masked
-        OUT[("OUTCOMES<br/>reported results")]:::out
-        RES[("RESULTS<br/>replays · scores · post-mortems<br/>rules · playbooks · evals")]:::res
-        LIVE[("LIVE<br/>today's case")]:::live
-        APP[("APP<br/>Streamlit app")]:::app
-    end
-
-    subgraph AI["🤖 Cortex AI"]
-        CMP["AI_COMPLETE<br/>Opus 4.6 / 4.8"]:::ai
-        SRCH["Cortex Search ×3"]:::ai
-        SV["Semantic views ×2<br/>(Cortex Analyst)"]:::ai
-        AG["Cortex Agents ×2"]:::ai
-        EV["AI evaluations"]:::ai
-    end
-
-    PDF -- "AI_PARSE_DOCUMENT<br/>AI_REDACT + masking" --> RAW --> MASKED
-    FS --> RAW
-    RAW --> OUT
-    MASKED -- "PIT_PACKET" --> CMP
-    CMP -- "SP_REPLAY · SP_POSTMORTEM<br/>SP_LEARN_*" --> RES
-    OUT -. "scoring and post-mortems only" .-> RES
-    LIVE -- "SP_LIVE_SANITY" --> CMP
-    RES & LIVE --> SRCH & SV --> AG
-    AG --> EV --> RES
-    RES & LIVE --> APP
-
-    classDef raw fill:#636E72,stroke:#2D3436,color:#fff
-    classDef masked fill:#A29BFE,stroke:#6C5CE7,color:#fff
-    classDef out fill:#FDCB6E,stroke:#E1A100,color:#2d3436
-    classDef res fill:#0984E3,stroke:#065A9E,color:#fff
-    classDef live fill:#00B894,stroke:#00866B,color:#fff
-    classDef app fill:#FF7675,stroke:#D63031,color:#fff
-    classDef ai fill:#FAB1A0,stroke:#E17055,color:#2d3436
-```
-
-### 🧱 Schemas: walls between what each step may see
-
-| Schema | Holds | Who reads it |
-|---|---|---|
-| ⬛ `RAW` | Real names and source documents. Never leaves the firm. *(Empty in this export.)* | Masking only |
-| 🟪 `MASKED` | Everything the forecaster is allowed to see: positions, revenue history, consensus, guidance, 46 documents (1,043 chunks) | Replays |
-| 🟨 `OUTCOMES` | Reported results, relative to the review date | Scoring and post-mortems only |
-| 🟦 `RESULTS` | Replays, scores, post-mortems, bias tags, rules, playbooks, pipeline checks, eval history | Agents, app |
-| 🟩 `LIVE` | The live sanity-check case (`Company_F`): packet, runs, comparison, written report | Agents, app |
-| 🟥 `APP` | The Streamlit app and its stage | Analysts |
-| ⬜ `EXPLORER` | Only the eval question set of a retired Explorer agent | Nobody (kept for history) |
-
-### ❄️ Snowflake features used
-
-| Feature | What it does here |
-|---|---|
-| `AI_PARSE_DOCUMENT`, `AI_REDACT` | Read the PDFs and catch personal details the masking missed |
-| `AI_COMPLETE` | Replays, post-mortems and rules: fixed prompts, temperature 0, every call logged |
-| Cortex Search | `DOC_SEARCH` (masked backtest documents), `PM_REPORT_SEARCH` (post-mortem text), `LIVE_DOC_SEARCH` (live documents) |
-| Cortex Analyst (semantic views) | `PM_ALL_SV` (backtest: errors, tags, post-mortems, learning loop, checks, evals) and `LIVE_SV` (live case) |
-| Cortex Agents | `POSTMORTEM_ANALYST` ("Projection Post-Mortem", both backtest and live) and `LIVE_SANITY_AGENT` (live only) |
-| AI evaluations | Agents and semantic views scored against ground truth, with custom Claude judges for masking and honesty |
-| Streamlit in Snowflake | `APP.POSTMORTEM_APP`, a read-only six-tab dashboard |
-
-### 🤖 The agent: `POSTMORTEM_ANALYST`
-
-Orchestrated by Opus 4.8, with a 400-second / 60k-token budget. It picks tools by question:
-
-| Tool | Type | Used for |
-|---|---|---|
-| `results_analyst` | Cortex Analyst → `PM_ALL_SV` | Any backtest number: errors, tags, learning loop, checks, eval scores |
-| `report_search` | Cortex Search | Why a case missed; what a post-mortem or rule says |
-| `doc_search` | Cortex Search | What the masked documents said before the review |
-| `live_analyst` | Cortex Analyst → `LIVE_SV` | Live-case numbers and the comparison table |
-| `live_doc_search` | Cortex Search | Live documents dated before D0 |
-| `run_sanity_check` | Procedure `LIVE.SP_LIVE_SANITY_TOOL` | A fresh live check, only when asked (4 model calls) |
-| `data_to_chart` | Chart | Charts of analyst output |
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor U as 👤 Analyst
-    participant A as 🤖 POSTMORTEM_ANALYST<br/>(Opus 4.8)
-    participant SV as 📐 PM_ALL_SV / LIVE_SV
-    participant CS as 🔎 Cortex Search
-    participant P as ⚙️ SP_LIVE_SANITY_TOOL
-    U->>A: "Why did Firm_X miss on case 61ca05a4bd2e?"
-    A->>SV: results_analyst: FY+1 error for the case
-    SV-->>A: −3.1% (too low)
-    A->>CS: report_search: post-mortem findings
-    CS-->>A: 3 groups + change next time
-    A-->>U: Gap → 🟢 lesson / 🟡 data to add / 🔴 hindsight → change next time
-    U->>A: "Run a fresh sanity check"
-    A->>P: run_sanity_check(dk)
-    P-->>A: raw / playbook / full + Opus 4.8 write-up
-    A-->>U: Comparison, rules fired, caveats
-```
-
-### 🖥️ The Streamlit app: `APP.POSTMORTEM_APP`
-
-Source: [`streamlit/streamlit_app_v3.py`](streamlit/streamlit_app_v3.py) · DDL: [`APP/streamlits/POSTMORTEM_APP.sql`](APP/streamlits/POSTMORTEM_APP.sql).
-It opens with a "Who's who" legend that explains each forecaster in plain words, and the live tab has a
-legend for each forecast view. It is read-only and calls no model, so opening it costs only warehouse time. It shows the firm's source label
-as `Firm_X`.
-
-| Tab | Reads | Shows |
-|---|---|---|
-| 📊 How did we do | `RESULTS.ERRORS` | Mean absolute and signed FY+1 error by forecaster; per-case heat map |
-| 🩺 Where each went wrong | `PM_REPORTS`, `PM_FINDINGS` | Projected vs reported, the three finding groups, change next time |
-| 🧠 Institutional biases | `PM_TAGS`, `ERRORS` | Tag counts by whose projection, with evidence |
-| 📚 Learning loop | `LEARN_SUMMARY`, `LEARN_RULE_SCORES` | Baseline vs round 1 vs round 2, wins/losses, noise, rule table |
-| 🚦 Live sanity check | `LIVE_COMPARISON`, `PLAYBOOK_RECORD`, `LIVE_RUNS_LATEST`, `SANITY_REPORT_LATEST` | The forecasts side by side, rules that fired, the written report |
-| ✅ Evals | `EVAL_HISTORY`, `PIPELINE_STATUS` | Latest score per metric against a pass bar; pipeline and hindsight gates |
-
-**Deploy:** create the `APP` schema and stage (`setup/`), upload the source, then run `APP/streamlits/POSTMORTEM_APP.sql`:
-
-```sql
-PUT file://streamlit/streamlit_app_v3.py @POSTMORTEM.APP.APP_STAGE AUTO_COMPRESS = FALSE OVERWRITE = TRUE;
-```
 
 ---
 
