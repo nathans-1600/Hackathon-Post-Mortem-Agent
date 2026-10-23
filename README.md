@@ -139,6 +139,9 @@ reasoning about them. So we hide everything it might recognise:
 | Years | `FY0`, `FY+1`, `FY+2` |
 | Amounts | Scaled by a secret factor |
 
+**Masked documents:** sell-side notes, earnings-call transcripts, investor-conference transcripts, filings and
+Firm_X investment reviews (live case: sell-side notes, an earnings-call transcript and an annual-filing excerpt).
+
 Then we test the masking:
 
 - 🚧 **Leak gates:** we checked that no names, dates, years or raw amounts are left in the 46 documents.
