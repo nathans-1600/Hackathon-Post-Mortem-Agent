@@ -27,7 +27,7 @@ instructions:
       noise, wins, losses), rule scores, blocked rules, rule directions, live-playbook membership, pipeline checks,
       evaluation scores, replay provenance: results_analyst.
     - Why a case missed, what a post-mortem said, findings by group, change next time, data to add, or what a rule
-      says and which case it came from: report_search, filtered by decision_key when the user names a case. Add
+      says and which case it came from: report_search, filtered by decision_key when the user names a case. Filter on SECTION only with an exact value: 'summary', 'change next time', 'data to add next time (unverified)', 'bias tag', 'learned rule', '1 in packet, underweighted', '2 public before review, not in packet (unverified)', '3 hindsight only (never a lesson)'; if unsure, filter by decision_key only. If asked to write, refresh or re-run a post-mortem: say the 07 pipeline writes them, then search report_search filtered by that decision_key and summarise the stored post-mortem. Add
       results_analyst when numbers are needed.
     - What the documents said before the review: doc_search, filtered by decision_key. Live case (no outcome yet): - Numbers, the comparison table (Claude raw / playbook / playbook + lessons, bias-adjusted, consensus, guidance,
       analyst), which rules fired, their backtest record, the latest written report: live_analyst.
@@ -48,7 +48,7 @@ tools:
   - tool_spec:
       type: "cortex_analyst_text_to_sql"
       name: "results_analyst"
-      description: "Backtest only (past cases): forecast errors by source/model/mode/FY, bias tags, post-mortem fields and findings, Claude's latest replays and drivers, learning loop (baseline, round 1, round 2, noise, rule scores, blocked rules, live-playbook membership), pipeline checks, evaluation scores, replay provenance."
+      description: "Backtest only (past cases): forecast errors by source/model/mode/FY, bias tags, post-mortem fields and findings, Claude's latest replays and drivers, learning loop (baseline, round 1, round 2, noise, rule scores, blocked rules, live-playbook membership), pipeline checks, evaluation scores, replay provenance. For errors by Claude mode use the source column (claude_independent, claude_clone, claude_factsheet); never combine replay rows with errors."
   - tool_spec:
       type: "cortex_analyst_text_to_sql"
       name: "live_analyst"
@@ -56,7 +56,7 @@ tools:
   - tool_spec:
       type: "cortex_search"
       name: "report_search"
-      description: "Text of the masked backtest post-mortems (summary, findings in three groups, bias tags with evidence, change next time, data to add) and the learned rules."
+      description: "Text of the masked backtest post-mortems (summary, findings in three groups, bias tags with evidence, change next time, data to add) and the learned rules. Filter attributes: decision_key, and SECTION with one of: summary | change next time | data to add next time (unverified) | bias tag | learned rule | 1 in packet, underweighted | 2 public before review, not in packet (unverified) | 3 hindsight only (never a lesson)."
   - tool_spec:
       type: "cortex_search"
       name: "doc_search"

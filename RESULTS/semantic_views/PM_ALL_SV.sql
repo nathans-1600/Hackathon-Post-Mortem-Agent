@@ -8,11 +8,11 @@
 create or replace semantic view POSTMORTEM.RESULTS.PM_ALL_SV
 	tables (
 		DECISIONS as POSTMORTEM.MASKED.POSITIONS primary key (DECISION_KEY) comment='One row per masked case (the investment review whose revenue projections are scored).',
-		POSTMORTEM.RESULTS.ERRORS comment='One row per forecast source x model x fiscal year, scored against reported revenue.',
+		POSTMORTEM.RESULTS.ERRORS comment='One row per forecast source x model x fiscal year, scored against reported revenue. Use this table alone for any error question, including errors by Claude mode.',
 		TAGS as POSTMORTEM.RESULTS.PM_TAGS primary key (TAG_ID) comment='Bias tags from the masked post-mortems, fixed list. A tag needs that source''s FY+1 miss to be at least 2%.',
 		REPORTS as POSTMORTEM.RESULTS.PM_REPORTS primary key (POSTMORTEM_ID) comment='Latest masked post-mortem per case: projected, reported, gap, closer sources, change next time, data to add.',
 		FINDINGS as POSTMORTEM.RESULTS.PM_FINDINGS primary key (FINDING_ID) comment='One row per post-mortem finding, in one of three groups. Only group 1 can be a lesson.',
-		REPLAYS as POSTMORTEM.RESULTS.REPLAY_LATEST primary key (RUN_ID) comment='Latest masked Claude replay per case, mode and model: projected growth FY+1..FY+3, confidence, view vs consensus.',
+		REPLAYS as POSTMORTEM.RESULTS.REPLAY_LATEST primary key (RUN_ID) comment='Latest masked Claude replay per case, mode and model: projected growth FY+1..FY+3, confidence, view vs consensus. Has no errors; never join it to ERRORS.',
 		DRIVERS as POSTMORTEM.RESULTS.REPLAY_DRIVERS primary key (DRIVER_ID) comment='Drivers Claude cited in its latest masked replays, with evidence as document type and day.',
 		LEARN as POSTMORTEM.RESULTS.LEARN_SUMMARY primary key (DECISION_KEY) comment='Learning loop per case, FY+1 absolute error: plain Opus 4.6 replay (baseline), round 1 playbook, round 2 pruned playbook; noise floor.',
 		RULES as POSTMORTEM.RESULTS.LEARN_RULE_SCORES primary key (RULE_ID) comment='Rules learned from the masked post-mortems: gate result, round-1 score, and whether they feed the live playbook.',
@@ -59,7 +59,8 @@ create or replace semantic view POSTMORTEM.RESULTS.PM_ALL_SV
 	dimensions (
 		DECISIONS.DECISION_KEY as decision_key,
 		DECISIONS.TIER as tier comment='A = review after the forecaster''s training cutoff, B = before.',
-		ERRORS.SOURCE as source with synonyms=('forecaster','who forecast') comment='parnassus (= Firm_X), consensus, guidance_mid, claude_independent, claude_clone, claude_factsheet',
+		ERRORS.SOURCE as source with synonyms=('forecaster','who forecast') comment='parnassus (= Firm_X), consensus, guidance_mid, claude_independent, claude_clone, claude_factsheet. Claude mode is part of the source: for errors by mode filter or group on source (or ERROR_MODE).',
+		ERRORS.ERROR_MODE as IFF(STARTSWITH(source, 'claude_'), SUBSTR(source, 8), NULL) with synonyms=('replay mode of an error','mode') comment='Claude replay mode of an error row: independent, clone or factsheet (NULL for parnassus, consensus, guidance_mid). Use this, never REPLAY_MODE, for errors by mode.',
 		ERRORS.MODEL as model comment='claude-opus-4-6 = clean forecaster; claude-opus-4-8 = contaminated control. Never average the two.',
 		ERRORS.FY_REL as fy_rel comment='FY+1, FY+2, FY+3 relative to the review',
 		TAGS.TAG as tag,
@@ -77,7 +78,7 @@ create or replace semantic view POSTMORTEM.RESULTS.PM_ALL_SV
 		FINDINGS.PUBLIC_DATE as public_date,
 		FINDINGS.EFFECT as effect,
 		FINDINGS.USABLE_AS_LESSON as usable_as_lesson,
-		REPLAYS.REPLAY_MODE as mode comment='independent, clone (house style), factsheet (600-word sheet)',
+		REPLAYS.REPLAY_MODE as mode comment='Replay rows only: independent, clone (house style), factsheet (600-word sheet). For projected growth and confidence. Never combine with ERRORS: both have several rows per case, so the join multiplies rows. For errors by mode use ERRORS.SOURCE or ERROR_MODE.',
 		REPLAYS.REPLAY_MODEL as model,
 		REPLAYS.MODEL_ROLE as model_role comment='clean (Opus 4.6) or contaminated control (Opus 4.8). Group by this before averaging.',
 		REPLAYS.VS_CONSENSUS as vs_consensus,
@@ -105,7 +106,7 @@ create or replace semantic view POSTMORTEM.RESULTS.PM_ALL_SV
 		EVALS.EVAL_TARGET as target,
 		EVALS.METRIC_NAME as metric_name,
 		EVALS.EVAL_CAPTURED_AT as captured_at,
-		PROVENANCE.PROV_MODE as mode,
+		PROVENANCE.PROV_MODE as mode comment='Replay run counts only (provenance). Never combine with ERRORS.',
 		PROVENANCE.PROV_MODEL as model
 	)
 	metrics (
@@ -125,12 +126,12 @@ create or replace semantic view POSTMORTEM.RESULTS.PM_ALL_SV
 	comment='One view for the masked backtest: errors, bias tags, post-mortems, Claude replays, learning loop, pipeline checks, evals'
 	ai_verified_queries (
 		VQ_LOWEST_FY1_ERROR AS (
-QUESTION 'Which source had the lowest FY+1 revenue error across all cases?'
+QUESTION 'Rank every source and model by mean absolute FY+1 revenue error across all cases, with the number of cases.'
 SQL 'SELECT source, model, ROUND(AVG(abs_pct_error), 2) AS mean_abs_pct_error, COUNT(*) AS n
            FROM POSTMORTEM.RESULTS.ERRORS WHERE fy_rel = ''FY+1''
            GROUP BY source, model ORDER BY mean_abs_pct_error'),
 		VQ_ERROR_BY_SOURCE AS (
-QUESTION 'What is the mean absolute and mean signed FY+1 error by source and model?'
+QUESTION 'What is the mean absolute and mean signed FY+1 error by source and model, with the number of cases?'
 SQL 'SELECT source, model, ROUND(AVG(abs_pct_error), 2) AS mean_abs_pct_error,
                   ROUND(AVG(pct_error), 2) AS mean_pct_error, COUNT(*) AS n
            FROM POSTMORTEM.RESULTS.ERRORS WHERE fy_rel = ''FY+1''
@@ -170,12 +171,12 @@ QUESTION 'Where did Claude differ from consensus in its independent replays?'
 SQL 'SELECT decision_key, model_role, fy1_growth_pct, vs_consensus FROM POSTMORTEM.RESULTS.REPLAY_LATEST
            WHERE mode = ''independent'' ORDER BY decision_key, model_role'),
 		VQ_CLAUDE_MEAN_GROWTH AS (
-QUESTION 'What was Claude''s average projected FY+1 growth across its independent replays?'
-SQL 'SELECT model_role, model, ROUND(AVG(fy1_growth_pct), 1) AS mean_fy1_growth_pct, COUNT(*) AS n
+QUESTION 'What was Claude''s average projected FY+1 growth in its independent replays, by model role and model, with the number of replays?'
+SQL 'SELECT model_role, model, ROUND(AVG(fy1_growth_pct), 2) AS mean_fy1_growth_pct, COUNT(*) AS n
            FROM POSTMORTEM.RESULTS.REPLAY_LATEST WHERE mode = ''independent''
            GROUP BY model_role, model ORDER BY model'),
 		VQ_LEARNING_SUMMARY AS (
-QUESTION 'Did the learning loop improve the forecasts?'
+QUESTION 'Across all cases, what were the mean baseline, round 1 and round 2 FY+1 absolute errors, with the number of cases, wins, losses, ties, noise and how many cases were pruned?'
 SQL 'SELECT COUNT(*) AS cases, ROUND(AVG(baseline_abs_err), 2) AS baseline_mean_abs_err,
                   ROUND(AVG(round1_abs_err), 2) AS round1_mean_abs_err, ROUND(AVG(round2_abs_err), 2) AS round2_mean_abs_err,
                   COUNT_IF(round2_gain_pts > 0) AS wins, COUNT_IF(round2_gain_pts < 0) AS losses,
@@ -183,14 +184,14 @@ SQL 'SELECT COUNT(*) AS cases, ROUND(AVG(baseline_abs_err), 2) AS baseline_mean_
                   COUNT_IF(round2_rules < round1_rules) AS cases_pruned
            FROM POSTMORTEM.RESULTS.LEARN_SUMMARY'),
 		VQ_PLAYBOOK_GAIN AS (
-QUESTION 'Did the learned playbook beat run-to-run noise on FY+1?'
+QUESTION 'Across all cases, what was the mean round 2 FY+1 gain against run-to-run noise, with wins, losses and the number of cases?'
 SQL 'SELECT ROUND(AVG(round2_gain_pts), 2) AS mean_gain_pts, ANY_VALUE(noise_pts) AS noise_pts,
                   COUNT_IF(round2_gain_pts > 0) AS wins, COUNT_IF(round2_gain_pts < 0) AS losses, COUNT(*) AS cases
            FROM POSTMORTEM.RESULTS.LEARN_SUMMARY'),
 		VQ_LEARNING_BY_CASE AS (
 QUESTION 'Show baseline, round 1 and round 2 FY+1 error for each case.'
-SQL 'SELECT decision_key, baseline_abs_err, round1_abs_err, round2_abs_err, round2_gain_pts, round1_rules, round2_rules
-           FROM POSTMORTEM.RESULTS.LEARN_SUMMARY ORDER BY round2_gain_pts DESC'),
+SQL 'SELECT decision_key, baseline_abs_err, round1_abs_err, round2_abs_err
+           FROM POSTMORTEM.RESULTS.LEARN_SUMMARY ORDER BY decision_key'),
 		VQ_RULE_SCORES AS (
 QUESTION 'Which learned rules helped most, and which are in the live playbook?'
 SQL 'SELECT rule_id, direction, rule, times_applied, net_wins, in_live_playbook
@@ -209,7 +210,7 @@ QUESTION 'Which rules were blocked from the playbooks, and why?'
 SQL 'SELECT rule_id, gate_hit, rule FROM POSTMORTEM.RESULTS.LEARN_RULE_SCORES
            WHERE NOT gate_ok ORDER BY rule_id'),
 		VQ_FAILING_GATES AS (
-QUESTION 'Are all pipeline checks passing?'
+QUESTION 'How many pipeline checks pass or fail, by kind and result?'
 SQL 'SELECT kind, result, COUNT(*) AS checks FROM POSTMORTEM.RESULTS.PIPELINE_STATUS
            GROUP BY kind, result ORDER BY kind, result'),
 		VQ_LATEST_EVAL AS (
@@ -217,7 +218,7 @@ QUESTION 'What were the latest evaluation scores for each agent?'
 SQL 'SELECT target, metric_name, ROUND(avg_score, 2) AS avg_score, n FROM POSTMORTEM.RESULTS.EVAL_HISTORY
            QUALIFY captured_at = MAX(captured_at) OVER (PARTITION BY target) ORDER BY target, metric_name'),
 		VQ_REPLAY_IMPORTS AS (
-QUESTION 'How many replay runs came from the sandbox, by mode and model?'
+QUESTION 'For each replay mode and model, how many runs were there, and how many were imported from the sandbox, fresh or unparsed?'
 SQL 'SELECT mode, model, runs, imported_runs, fresh_runs, unparsed_runs FROM POSTMORTEM.RESULTS.REPLAY_PROVENANCE
            ORDER BY mode, model')
 	);

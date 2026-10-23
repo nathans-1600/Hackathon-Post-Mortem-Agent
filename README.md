@@ -4,7 +4,8 @@
 (Snowflake x Anthropic).
 
 This repo holds the Snowflake DDL for the `POSTMORTEM` database that runs the project. It was exported from
-the live Snowflake account on 2026-10-23 and re-exported the same day, after the agents were consolidated.
+the live Snowflake account on 2026-10-23 and re-exported the same day, after the agents were consolidated and
+again once the Streamlit app was added.
 
 The live database is the source of truth and these scripts are its export: change Snowflake first, then
 re-export (see [.claude/skills/export-ddl/SKILL.md](.claude/skills/export-ddl/SKILL.md)). Rules for AI agents
@@ -156,8 +157,8 @@ The design is one database with four walls between its schemas:
 | `OUTCOMES` | Reported results, read only by scoring and post-mortems |
 | `RESULTS` | Replays, scores, post-mortems, rules and playbooks |
 
-Two more schemas sit on top: `LIVE` holds the live sanity-check case, and `EXPLORER` keeps only the
-evaluation data of a retired Explorer agent.
+Three more schemas sit on top: `LIVE` holds the live sanity-check case, `APP` holds the Streamlit app, and
+`EXPLORER` keeps only the evaluation data of a retired Explorer agent.
 
 | Snowflake feature | What it does here |
 |---|---|
@@ -167,7 +168,8 @@ evaluation data of a retired Explorer agent.
 | Cortex Agents, AI evaluations | The post-mortem analyst and the sanity check, scored against ground truth |
 
 Two Cortex Agents sit on top: `POSTMORTEM_ANALYST` answers questions about both the backtest and the live
-case, and `LIVE_SANITY_AGENT` is a smaller agent for the live case only.
+case, and `LIVE_SANITY_AGENT` is a smaller agent for the live case only. A read-only Streamlit app,
+`APP.POSTMORTEM_APP` ("Decision Post-Mortem"), shows the results without calling a model.
 
 **In one line:** every post-mortem becomes a rule, every rule must prove itself on cases it never saw, and
 only the survivors shape the next forecast.
@@ -184,9 +186,10 @@ listing its objects with their descriptions.
 |---|---|---|
 | `MASKED/` | Everything the forecaster may see: the masked backtest cases and the packet builders | [tables](MASKED/tables) (9), [file_formats](MASKED/file_formats) (1), [functions](MASKED/functions) (2) |
 | `OUTCOMES/` | Reported results, read only by scoring and post-mortems | [tables](OUTCOMES/tables) (1) |
-| `RESULTS/` | Replays, scores, post-mortems, the learning loop, evaluations, and the backtest's search, semantic view and agent | [tables](RESULTS/tables) (11), [sequences](RESULTS/sequences) (1), [views](RESULTS/views) (13), [procedures](RESULTS/procedures) (4), [search_services](RESULTS/search_services) (2), [semantic_views](RESULTS/semantic_views) (1), [agents](RESULTS/agents) (1) |
+| `RESULTS/` | Replays, scores, post-mortems, the learning loop, evaluations, and the backtest's search, semantic view and agent | [tables](RESULTS/tables) (12), [sequences](RESULTS/sequences) (1), [views](RESULTS/views) (13), [procedures](RESULTS/procedures) (4), [search_services](RESULTS/search_services) (2), [semantic_views](RESULTS/semantic_views) (1), [agents](RESULTS/agents) (1) |
 | `EXPLORER/` | Evaluation data of the retired Explorer agent | [tables](EXPLORER/tables) (1) |
 | `LIVE/` | The live sanity-check case (masked, no outcome yet) | [tables](LIVE/tables) (12), [views](LIVE/views) (5), [file_formats](LIVE/file_formats) (1), [functions](LIVE/functions) (2), [procedures](LIVE/procedures) (3), [search_services](LIVE/search_services) (1), [semantic_views](LIVE/semantic_views) (1), [agents](LIVE/agents) (1) |
+| `APP/` | The read-only Streamlit app and its source | [file_formats](APP/file_formats) (1), [streamlits](APP/streamlits) (1) |
 
 Two more entries sit at the root: [`setup/`](setup) (warehouse, database and schemas, stages) and
 [`deploy.sql`](deploy.sql) (the run order).
@@ -210,7 +213,10 @@ Otherwise, run the files it lists one by one, in that order.
 - **Grants and ownership.** Everything is owned by `SYSADMIN` on the source, and no grants were exported.
 - **Auto-generated objects.** The `AI_OBS_OUTPUT_PARSER_*` functions and the `_PEP_YAML_READER` file format are
   created by Snowflake agent observability and are left out on purpose.
-- **`RESULTS.AGENT_SPEC_BACKUP`.** A one-off backup of agent specs taken before the agents were consolidated.
+- **`RESULTS.AGENT_SPEC_BACKUP` and `RESULTS.EVAL_POSTMORTEM_ANALYST_BAK_20261023`.** One-off backups (agent
+  specs before the agents were consolidated, and an evaluation table).
+- **Old app drafts.** `APP_STAGE` also holds earlier drafts of the app source; only the main file the app runs
+  is exported.
 - **`POSTMORTEM.RAW` and `PUBLIC` schemas.** Both are empty on the source.
 
 ## Known gaps in the source (exported as-is)
@@ -226,8 +232,9 @@ Otherwise, run the files it lists one by one, in that order.
 
 ## Verification
 
-- Every object file except the agents (71) was compared with `GET_DDL` output from the source account using
-  a whitespace-normalised SHA-256: 71 of 71 were identical, and every exported object has exactly one file.
+- Every object file except the agents (74) was compared with `GET_DDL` output from the source account using
+  a whitespace-normalised SHA-256: 74 of 74 were identical, and every exported object has exactly one file.
+- The app source matches the main file on `APP_STAGE` byte for byte (same MD5).
 - Each agent's YAML (2 agents) parses to the same JSON as the spec stored on the source account.
 - `deploy.sql` lists every file once, and no file uses an object listed after it.
 - **Not verified:** the scripts have not been run against an empty account, so syntax that depends on your
