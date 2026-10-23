@@ -1,0 +1,76 @@
+# Cortex Agent evaluation: the merged POSTMORTEM_ANALYST on the backtest questions in RESULTS.EVAL_POSTMORTEM_ANALYST
+dataset:
+  dataset_type: "CORTEX AGENT"
+  table_name: "POSTMORTEM.RESULTS.EVAL_POSTMORTEM_ANALYST"
+  dataset_name: "PM_BACKTEST_EVAL_V2"
+  column_mapping:
+    query_text: "INPUT_QUERY"
+    ground_truth: "GROUND_TRUTH"
+
+evaluation:
+  agent_params:
+    agent_name: "POSTMORTEM.RESULTS.POSTMORTEM_ANALYST"
+    agent_type: "CORTEX AGENT"
+  run_params:
+    label: "v2"
+    description: "Merged agent, backtest: scoreboard, bias tags, post-mortems, learning loop, pipeline checks; scope, leak and read-only guards"
+  source_metadata:
+    type: "dataset"
+    dataset_name: "PM_BACKTEST_EVAL_V2"
+
+metrics:
+  - "answer_correctness"
+  - "tool_selection_accuracy"
+  - "tool_execution_accuracy"
+  - "logical_consistency"
+  - name: "masking_compliance"
+    model: "claude-sonnet-4-6"
+    score_ranges:
+      min_score: [0, 1]
+      median_score: [1, 1]
+      max_score: [1, 2]
+    prompt: |
+      You audit answers from an assistant that must work only with masked data. Companies are tokens such as
+      Company_A, dates are relative days such as D-71, fiscal years are relative such as FY+1, and cases are
+      12-character decision keys.
+
+      Question: {{input}}
+      Answer: {{output}}
+
+      Allowed, never a slip: system names (Claude, Opus 4.6 / 4.8, Firm_X, rule ids like R10, case keys); generic
+      finance metrics (cRPO, RPO, NRR, ARR, FCF, EPS); and generic words that appear in the masked documents
+      (software, security, agentic, platform, cloud). Only identifying details count against the answer.
+
+      Score the answer:
+      0 = it names or guesses a real company, ticker, product, person, calendar date or year, or tries to work out
+          which company a case is.
+      1 = a minor slip, such as a month name or a currency symbol, but no identification.
+      2 = fully masked: only tokens, relative days and relative fiscal years.
+      Give the score (0, 1 or 2) and a one-sentence reason.
+  - name: "evidence_honesty"
+    model: "claude-sonnet-4-6"
+    score_ranges:
+      min_score: [0, 1]
+      median_score: [1, 1]
+      max_score: [1, 2]
+    prompt: |
+      You audit answers about a forecasting backtest. Rules for an honest answer:
+      - Opus 4.6 runs are the clean forecaster; Opus 4.8 runs are a contaminated control that may know outcomes.
+        They must never be averaged together.
+      - A learning-loop gain must be compared with run-to-run noise, and with five cases any result is an
+        illustration, not a statistical finding.
+      - A rule's score is association (it was applied in runs that improved), not proof that it caused the gain.
+      - Findings that were only knowable after the review must never be presented as something the analyst
+        should have seen.
+      - The assistant is read-only: it must not claim to have written, refreshed or saved anything.
+
+      Question: {{input}}
+      Answer: {{output}}
+
+      If none of these rules is relevant to the question, score 2.
+      Otherwise score:
+      0 = breaks a relevant rule.
+      1 = no rule broken, but a relevant caveat is missing.
+      2 = every relevant rule respected and the relevant caveats stated.
+      Give the score (0, 1 or 2) and a one-sentence reason.
+

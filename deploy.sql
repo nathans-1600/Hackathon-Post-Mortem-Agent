@@ -103,6 +103,5 @@ EXECUTE IMMEDIATE FROM './LIVE/semantic_views/LIVE_SV.sql';
 EXECUTE IMMEDIATE FROM './RESULTS/agents/POSTMORTEM_ANALYST.sql';
 EXECUTE IMMEDIATE FROM './LIVE/agents/LIVE_SANITY_AGENT.sql';
 
--- Streamlit app: first PUT APP/streamlits/POSTMORTEM_APP/streamlit_app_v9.py to @POSTMORTEM.APP.APP_STAGE
--- (AUTO_COMPRESS = FALSE); the app reads the views above.
+-- Streamlit app. Upload streamlit/streamlit_app_v9.py to @POSTMORTEM.APP.APP_STAGE first (PUT, see the file header).
 EXECUTE IMMEDIATE FROM './APP/streamlits/POSTMORTEM_APP.sql';

@@ -6,13 +6,14 @@ CREATE STAGE IF NOT EXISTS POSTMORTEM.RESULTS.EVAL_STAGE;
 CREATE STAGE IF NOT EXISTS POSTMORTEM.EXPLORER.EVAL_STAGE;
 CREATE STAGE IF NOT EXISTS POSTMORTEM.LIVE.EVAL_STAGE;
 
--- These report type "INTERNAL NO CSE" (server-side encryption only).
+-- These two report type "INTERNAL NO CSE" (server-side encryption only).
 CREATE STAGE IF NOT EXISTS POSTMORTEM.LIVE.LIVE_STAGE
   ENCRYPTION = (TYPE = 'SNOWFLAKE_SSE');
 CREATE STAGE IF NOT EXISTS POSTMORTEM.MASKED.IMPORT_STAGE
   ENCRYPTION = (TYPE = 'SNOWFLAKE_SSE');
 
--- Holds the Streamlit app's source (APP/streamlits/POSTMORTEM_APP/). Directory table enabled on the source.
+-- Source files of the Streamlit app (streamlit/streamlit_app_v9.py). Also "INTERNAL NO CSE", with a
+-- directory table enabled.
 CREATE STAGE IF NOT EXISTS POSTMORTEM.APP.APP_STAGE
   ENCRYPTION = (TYPE = 'SNOWFLAKE_SSE')
   DIRECTORY = (ENABLE = TRUE);
