@@ -30,7 +30,7 @@ The live database holds real (masked) data, and the table scripts start with `CR
 - **Ask the user first, every time:** any `CREATE`, `ALTER`, `DROP`, `TRUNCATE`, `INSERT`, `UPDATE`,
   `DELETE`, `MERGE`, `GRANT`, and any `CALL`. The procedures write rows and call `AI_COMPLETE`
   (Claude via Cortex), so a `CALL` costs credits and changes results. Say exactly what you will run.
-- **Never** run any file under `sql/*/tables/`, or `sql/deploy.sql`, against the populated `POSTMORTEM`
+- **Never** run any file under `*/tables/`, or `deploy.sql`, against the populated `POSTMORTEM`
   database. They recreate tables and wipe the data. Use them only on a fresh, empty database.
 - Work only in the `POSTMORTEM` database and the `PM_WH` warehouse.
 
@@ -55,16 +55,17 @@ Everything in the data is masked. Keep it that way.
 
 ## Layout
 
-One file per object. [sql/README.md](sql/README.md) lists every object with a description.
+One file per object, at the repo root by schema and type. The root [README.md](README.md) has a schema map;
+each type folder's `README.md` lists its objects with descriptions.
 
 | Path | Holds |
 |---|---|
-| `sql/00_setup/` | `warehouse.sql`, `database_and_schemas.sql`, `stages.sql` (reconstructed from `SHOW`, not `GET_DDL`) |
-| `sql/<SCHEMA>/<type>/<NAME>.sql` | One object. Schemas: `MASKED`, `OUTCOMES`, `RESULTS`, `EXPLORER`, `LIVE`. Types: `tables`, `sequences`, `file_formats`, `functions`, `views`, `procedures`, `search_services`, `semantic_views`, `agents` |
-| `sql/deploy.sql` | Runs every file in dependency order on a fresh database (`EXECUTE IMMEDIATE FROM`) |
-| `sql/README.md` | Index: every object, its type and description |
+| `setup/` | `warehouse.sql`, `database_and_schemas.sql`, `stages.sql` (reconstructed from `SHOW`, not `GET_DDL`) |
+| `<SCHEMA>/<type>/<NAME>.sql` | One object. Schemas: `MASKED`, `OUTCOMES`, `RESULTS`, `EXPLORER`, `LIVE`. Types: `tables`, `sequences`, `file_formats`, `functions`, `views`, `procedures`, `search_services`, `semantic_views`, `agents` |
+| `<SCHEMA>/<type>/README.md` | That folder's objects: description, and what each uses or writes (generated from the file headers) |
+| `deploy.sql` | Runs every file in dependency order on a fresh database (`EXECUTE IMMEDIATE FROM`) |
 
-To find an object's DDL, go straight to its path, e.g. `sql/RESULTS/views/ERRORS.sql`.
+To find an object's DDL, go straight to its path, e.g. `RESULTS/views/ERRORS.sql`.
 
 ## Conventions in the scripts
 
@@ -72,7 +73,8 @@ To find an object's DDL, go straight to its path, e.g. `sql/RESULTS/views/ERRORS
   `VARCHAR(16777216)`). Don't reformat them: the export check compares them with `GET_DDL` by hash.
 - Each object file holds exactly one statement, after a `--` header: the object's full name and type, a
   description, `Uses` / `Writes` / `Written by` lines, then known gaps and warnings. Keep headers when
-  re-exporting; the export skill describes the format.
+  re-exporting; the export skill describes the format. When a header's description changes, update the
+  folder's `README.md` row to match.
 - Object names are fully qualified (`POSTMORTEM.<SCHEMA>.<NAME>`).
 - Run order lives only in `deploy.sql`: dependency order, not `GET_DDL`'s alphabetical order. A new file
   must be added there, after everything it uses.

@@ -32,8 +32,8 @@ SHOW STAGES IN DATABASE POSTMORTEM;
 SHOW WAREHOUSES LIKE 'PM_WH';
 ```
 
-List what the repo has: the object files `sql/<SCHEMA>/<type>/<NAME>.sql` (one statement each), plus the
-hand-written `sql/00_setup/*.sql`. Report to the user before writing anything: objects **added** in Snowflake, objects
+List what the repo has: the object files `<SCHEMA>/<type>/<NAME>.sql` (one statement each), plus the
+hand-written `setup/*.sql`. Report to the user before writing anything: objects **added** in Snowflake, objects
 **removed** from Snowflake, and objects in both. Removed objects get deleted from the scripts; confirm that
 with the user, since a removal can be a mistake on the Snowflake side.
 
@@ -65,10 +65,10 @@ Snowflake may be changing while you export (another session rebuilding an object
 
 ## 3. Write one file per object
 
-Each object gets its own file: `sql/<SCHEMA>/<type>/<NAME>.sql`, where `<type>` is one of `tables`,
+Each object gets its own file: `<SCHEMA>/<type>/<NAME>.sql`, where `<type>` is one of `tables`,
 `sequences`, `file_formats`, `functions`, `views`, `procedures`, `search_services`, `semantic_views`, `agents`,
 and `<NAME>` is the object name as `SHOW` returns it. Warehouse, database, schemas and stages live in the
-hand-written `sql/00_setup/` files (`warehouse.sql`, `database_and_schemas.sql`, `stages.sql`), rebuilt from `SHOW`.
+hand-written `setup/` files (`warehouse.sql`, `database_and_schemas.sql`, `stages.sql`), rebuilt from `SHOW`.
 
 Each object file is a `--` header, a blank line, then the statement:
 
@@ -91,8 +91,9 @@ Each object file is a `--` header, a blank line, then the statement:
 - **Changed object:** replace only the statement; keep the header's description and notes, and refresh the
   `Uses` / `Writes` / `Written by` lines (other files' `Written by` lines too, if a procedure's writes changed).
 - **New object:** write a description from what the DDL does (read the body; don't guess). Masking rules apply.
-- **Removed object:** delete its file, its `deploy.sql` line and its `sql/README.md` row, and drop it from
-  other files' header lines.
+- **Removed object:** delete its file, its `deploy.sql` line and its row in the folder's `README.md`, and drop
+  it from other files' header lines. If a type folder ends up empty, delete the folder and its link in the
+  root README's schema map.
 
 Rules:
 
@@ -115,14 +116,19 @@ Rules:
 
 - Keep the existing known-gap notes in headers; don't fix the gaps themselves.
 
-Then update the two indexes:
+Then update the indexes:
 
-- **`sql/deploy.sql`**: one `EXECUTE IMMEDIATE FROM './<path>';` line per file, setup first. Order: tables,
+- **`deploy.sql`**: one `EXECUTE IMMEDIATE FROM './<path>';` line per file, setup first. Order: tables,
   sequences and file formats; then functions and views; procedures; search services; semantic views; agents.
   Within that, every object must come after everything in its `Uses` line (views in particular: `GET_DDL`
   alphabetical order fails on a fresh account). Procedures may reference objects that don't exist (known
   gaps); those don't affect the order.
-- **`sql/README.md`**: one row per object in its schema's table (object link, type, the header description).
+- **`<SCHEMA>/<type>/README.md`**: one row per object in the folder's table: link, the header description,
+  and the header's `Written by` (tables), `Writes` (procedures) or `Uses` (other types). Object-specific notes
+  from the header (known gaps, quirks) go in its Notes list. Keep the folder intro and type-wide notes. For a
+  new type folder, write the README in the same form as the others and link it from the root README's schema
+  map, with the object count.
+- **Root `README.md` schema map:** update the object counts per folder if objects were added or removed.
 
 ## 4. Verify
 
@@ -134,14 +140,13 @@ Then update the two indexes:
   against Snowflake's: `EXECUTE IMMEDIATE $$ BEGIN DESCRIBE AGENT ...; LET rs RESULTSET := (SELECT
   sha2("agent_spec") FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))); RETURN TABLE(rs); END; $$`.
 - **Coverage:** every object from step 1 (minus the skipped ones) has exactly one file, each file holds exactly
-  one statement, and every file is listed exactly once in `deploy.sql` and `sql/README.md`.
+  one statement, and every file is listed exactly once in `deploy.sql` and in its folder's `README.md`.
 - **Order:** walking `deploy.sql` top to bottom, no file uses an object that comes later.
 
 If anything fails, fix the file and re-check. Don't loosen the comparison.
 
 ## 5. Update docs, then stop
 
-- Update `README.md` (the export date, the Verification section's counts, and the object lists if objects
-  were added or removed) and `AGENTS.md` if the layout or a safety-relevant object changed.
+- Update the root `README.md` (the export date, the Verification section's counts) and `AGENTS.md` if the layout or a safety-relevant object changed.
 - Show the user a summary: objects added, removed and changed, and the verification counts.
 - Commit only when the user asks. Never push without being asked.
