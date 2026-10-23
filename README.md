@@ -22,13 +22,14 @@
 
 ### 😟 The problem
 
-Every investment review makes a forecast, and almost nobody checks it afterwards.
+Every investment review rests on a revenue forecast, and those forecasts drive real decisions. Yet:
 
 | | |
 |---|---|
-| 📈 **We forecast** | Every investment review projects revenue for the next three fiscal years. |
-| 🙈 **We rarely look back** | Nobody systematically compares those numbers with what the company later reported. |
-| 🔮 **Hindsight wins** | When we do look back, knowing the ending makes every miss look obvious, so we learn the wrong lessons. |
+| 📉 **Nobody keeps score** | We project revenue three years out in every review, but rarely compare the numbers with what the company later reported. |
+| 🔮 **Hindsight distorts the lesson** | When we do look back, knowing the ending makes every miss look obvious. We blame events nobody could have seen, and overlook the signals that were in front of us. |
+| 🧠 **Lessons don't compound** | What we learn stays in people's heads, untested, and never reaches the next review. The same habits, such as anchoring to management's guidance, repeat. |
+| 🤖 **AI alone doesn't fix it** | A model trained after the results came out "forecasts" from memory. Its backtest looks brilliant and means nothing. |
 
 ### 💡 The idea
 
@@ -37,23 +38,24 @@ Every investment review makes a forecast, and almost nobody checks it afterwards
 >
 > People can't un-know an outcome. A model can be chosen, and tested, so that it doesn't know it.
 
-Decision Post-Mortem uses Claude as that judge. It:
+### 🛠️ How we solved it
 
-1. 🔁 **re-forecasts** past reviews using only what we knew at the time,
-2. 🩺 **explains** where each forecast went wrong (ours, Claude's and Wall Street consensus),
-3. 📚 **turns** those explanations into rules that must prove themselves on cases they never saw, and
-4. 🚦 **applies** the surviving rules to a review happening today, as a sanity check.
+| Problem | What we did |
+|---|---|
+| Nobody keeps score | Scored every forecast against reported revenue: ours (Firm_X), Claude's (three ways), sell-side consensus and management guidance, all on the same yardstick. |
+| Hindsight | Rebuilt five past reviews exactly as they stood on the review date: only documents, consensus and guidance dated before it. Results live in a separate schema the forecaster can't read. |
+| The model might remember | Masked every name, date, year and amount, picked Claude Opus 4.6 for its training cutoff, and probed it for recall (it had none). A newer model runs as a "may know the answer" control, never mixed in. |
+| Blaming the unknowable | Every post-mortem sorts each finding into one of three groups: **we had it**, **we could have got it**, or **nobody could have known**. Only the first becomes a lesson. |
+| Lessons don't compound | Each lesson becomes a rule that must improve forecasts on cases it never saw. A case never learns from its own ending, and rules that make things worse are dropped. A gain only counts if it beats run-to-run noise. |
+| Lessons never reach the next review | The surviving rules feed a **live sanity check** on a review being made today, shown in a Streamlit app and a plain-English Cortex Agent. |
+| Can we trust the AI? | Graded the agents on 43 questions with known answers, including traps ("Which company is this?", "Should we buy?"). They scored 1.00 on masking. |
 
-### 🧑‍💼 What you can do with it
+### 🌟 What makes it different
 
-| You want to… | Open | What you get |
-|---|---|---|
-| See how accurate we were versus Claude, consensus and company guidance | 🖥️ **Streamlit app**, tab *How did we do* | Error scoreboard and bias direction, per case |
-| Understand **why** a forecast missed | 🖥️ App, tab *Where each went wrong* | Findings split into "we had it", "we could have had it" and "nobody could have known" |
-| Spot our recurring habits | 🖥️ App, tab *Institutional biases* | Bias tags such as *anchored to guidance*, with evidence |
-| Check whether the lessons actually help | 🖥️ App, tab *Learning loop* | Before/after error, wins vs losses, compared with run-to-run noise |
-| Sanity-check a forecast being made **today** | 🖥️ App, tab *Live sanity check* or 🤖 ask the agent | Claude raw vs Claude + lessons vs consensus vs the analyst |
-| Ask a question in plain English | 🤖 **Projection Post-Mortem** agent (Snowflake Intelligence) | An answer with sources, charts and caveats |
+- **No hindsight.** The forecaster sees only what we knew then, and we test that it can't recall what came next.
+- **Fair blame.** Misses are split into what we could and couldn't have known, so lessons come only from what was actually in front of us.
+- **Lessons have to earn their place.** Rules are tested on cases they never saw, against noise, before they touch a live forecast.
+- **It closes the loop.** The same lessons are applied to today's review, not filed away.
 
 > [!IMPORTANT]
 > **Everything is masked.** Companies, people, brokers and products appear as tokens (`Company_A`, `Exec_A1`,
@@ -83,8 +85,10 @@ flowchart LR
     classDef live fill:#00B894,stroke:#00866B,color:#fff
 ```
 
-The app's six tabs are listed in [What you can do with it](#-what-you-can-do-with-it). Questions that try to
-identify a company or ask for a buy or sell call get a polite refusal.
+The app has six tabs: **How did we do** (error scoreboard), **Where each went wrong** (the three-group
+post-mortem), **Institutional biases** (tags with evidence), **Learning loop** (before and after, against noise),
+**Live sanity check**, and **Evals**. The agent answers the same questions in plain English. Questions that try
+to identify a company or ask for a buy or sell call get a polite refusal.
 
 ---
 
@@ -298,12 +302,24 @@ holding.
 | | Finding | Number |
 |---|---|---|
 | 🏆 | Most accurate FY+1 source across the five cases | **Firm_X**, about **1.8%** mean absolute error (n=5) |
-| ↘️ | Firm_X bias on FY+1 | On average **0.6% too low** |
+| 🤖 | Claude, independent (clean Opus 4.6) | about **2.1%** mean absolute error |
+| ↘️ | Firm_X bias on FY+1 | On average **0.6% too low**: we lean conservative |
 | 🎯 | Guidance midpoint on FY+1 | **3.6% too low** (n=2, not every case had full-year guidance) |
 | 🧠 | Most frequent bias tag | *anchored to guidance*, describing **consensus** (4 tags) |
+| 🔎 | Firm_X's tag on the case reviewed in detail | *narrative over numbers*: the story outweighed a stronger quarter in front of us |
 | 📚 | Learning loop, FY+1 mean absolute error (Opus 4.6) | **2.05% → 1.67%**, 3 wins, 0 losses, 2 ties; run-to-run noise 0.04 pts |
 | 📘 | Live playbook | **19 active rules**: 15 say raise, 3 lower, 1 widen the range |
 | 🚦 | Live case FY+1 growth | Claude raw **9.3%** → with playbook **9.8%** · consensus **9.1%** · analyst **12.9%** |
+
+**What it tells us:** our analysts were the most accurate forecasters, but on average they forecast too low,
+and the lessons learned from our own misses made Claude's forecasts better on cases it had never seen. On
+today's case, the analyst sits well above Claude, consensus and guidance: exactly the kind of gap the sanity
+check is built to flag for a second look.
+
+> [!WARNING]
+> **Read with care.** Five cases illustrate the method; they don't prove it. 15 of the 19 rules push estimates
+> up, probably because they were learned in a period that rewarded optimism, so they could mislead in a
+> downturn. The live case has no outcome yet, so nobody can say which forecast is right.
 
 ---
 
