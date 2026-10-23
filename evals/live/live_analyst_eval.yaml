@@ -1,0 +1,11 @@
+# Cortex Analyst evaluation: sql_correctness on LIVE_SV's verified queries (13_live_masked.sql section I3).
+# Upload to @POSTMORTEM.LIVE.EVAL_STAGE, then run 13 section J.
+evaluation:
+  analyst_params:
+    analyst_name: "POSTMORTEM.LIVE.LIVE_SV"
+    analyst_type: "SEMANTIC VIEW"
+  source_metadata:
+    type: "verified_queries"   # no list given = every verified query on the view
+
+metrics:
+  - "sql_correctness"

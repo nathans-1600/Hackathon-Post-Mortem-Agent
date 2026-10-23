@@ -1,0 +1,11 @@
+# Cortex Analyst evaluation: sql_correctness on PM_EXPLORER_SV's verified queries (AI_VERIFIED_QUERIES in 08b).
+# Upload to @POSTMORTEM.EXPLORER.EVAL_STAGE, then run 09b_explorer_eval.sql section D.
+evaluation:
+  analyst_params:
+    analyst_name: "POSTMORTEM.EXPLORER.PM_EXPLORER_SV"
+    analyst_type: "SEMANTIC VIEW"
+  source_metadata:
+    type: "verified_queries"   # no list given = every verified query on the view
+
+metrics:
+  - name: "sql_correctness"

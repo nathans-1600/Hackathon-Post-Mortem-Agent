@@ -28,6 +28,7 @@ SHOW SEQUENCES IN DATABASE POSTMORTEM;
 SHOW CORTEX SEARCH SERVICES IN DATABASE POSTMORTEM;
 SHOW SEMANTIC VIEWS IN DATABASE POSTMORTEM;
 SHOW AGENTS IN DATABASE POSTMORTEM;
+SHOW STREAMLITS IN DATABASE POSTMORTEM;
 SHOW STAGES IN DATABASE POSTMORTEM;
 SHOW WAREHOUSES LIKE 'PM_WH';
 ```
@@ -61,12 +62,14 @@ Snowflake may be changing while you export (another session rebuilding an object
 | Cortex Search service | `GET_DDL('cortex_search_service', 'POSTMORTEM.<S>.<NAME>', TRUE)` |
 | Semantic view | `GET_DDL('semantic_view', 'POSTMORTEM.<S>.<NAME>', TRUE)` |
 | Agent | `DESCRIBE AGENT POSTMORTEM.<S>.<NAME>`: use `comment`, `profile` and `agent_spec` (JSON) |
+| Streamlit app | `GET_DDL('streamlit', 'POSTMORTEM.<S>.<NAME>', TRUE)`. Its main file (`DESCRIBE STREAMLIT`) goes in `streamlit/`, copied exactly from the stage (see AGENTS.md) |
 | Warehouse, stage | Not supported by `GET_DDL`. Rebuild from `SHOW WAREHOUSES` / `SHOW STAGES` (size, auto-suspend, auto-resume, stage encryption type) |
 
 ## 3. Write one file per object
 
 Each object gets its own file: `<SCHEMA>/<type>/<NAME>.sql`, where `<type>` is one of `tables`,
 `sequences`, `file_formats`, `functions`, `views`, `procedures`, `search_services`, `semantic_views`, `agents`,
+`streamlits`,
 and `<NAME>` is the object name as `SHOW` returns it. Warehouse, database, schemas and stages live in the
 hand-written `setup/` files (`warehouse.sql`, `database_and_schemas.sql`, `stages.sql`), rebuilt from `SHOW`.
 
@@ -119,7 +122,7 @@ Rules:
 Then update the indexes:
 
 - **`deploy.sql`**: one `EXECUTE IMMEDIATE FROM './<path>';` line per file, setup first. Order: tables,
-  sequences and file formats; then functions and views; procedures; search services; semantic views; agents.
+  sequences and file formats; then functions and views; procedures; search services; semantic views; agents; streamlits.
   Within that, every object must come after everything in its `Uses` line (views in particular: `GET_DDL`
   alphabetical order fails on a fresh account). Procedures may reference objects that don't exist (known
   gaps); those don't affect the order.

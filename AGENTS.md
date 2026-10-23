@@ -8,7 +8,8 @@ Instructions for AI coding agents (Claude Code, Snowflake Cortex Code, and anyth
 DDL for the `POSTMORTEM` Snowflake database: a masked backtest where Claude re-forecasts past investment
 reviews' revenue, the forecasts are scored against reported revenue, post-mortems explain the misses, a
 learning loop turns post-mortems into rules ("playbooks"), and a live case gets a sanity check using those
-rules. Cortex Agents sit on top. There is no application code: every file is a `.sql` script.
+rules. Cortex Agents and a read-only Streamlit in Snowflake app sit on top. Apart from the app
+(`streamlit/`) and the evaluation configs (`evals/*.yaml`), every file is a `.sql` script.
 
 ## Source of truth: Snowflake, not the repo
 
@@ -61,9 +62,16 @@ each type folder's `README.md` lists its objects with descriptions.
 | Path | Holds |
 |---|---|
 | `setup/` | `warehouse.sql`, `database_and_schemas.sql`, `stages.sql` (reconstructed from `SHOW`, not `GET_DDL`) |
-| `<SCHEMA>/<type>/<NAME>.sql` | One object. Schemas: `MASKED`, `OUTCOMES`, `RESULTS`, `EXPLORER`, `LIVE`. Types: `tables`, `sequences`, `file_formats`, `functions`, `views`, `procedures`, `search_services`, `semantic_views`, `agents` |
+| `<SCHEMA>/<type>/<NAME>.sql` | One object. Schemas: `MASKED`, `OUTCOMES`, `RESULTS`, `EXPLORER`, `LIVE`, `APP`. Types: `tables`, `sequences`, `file_formats`, `functions`, `views`, `procedures`, `search_services`, `semantic_views`, `agents`, `streamlits` |
 | `<SCHEMA>/<type>/README.md` | That folder's objects: description, and what each uses or writes (generated from the file headers) |
 | `deploy.sql` | Runs every file in dependency order on a fresh database (`EXECUTE IMMEDIATE FROM`) |
+| `streamlit/streamlit_app_v3.py` | Main file of `APP.POSTMORTEM_APP`, a copy of `@POSTMORTEM.APP.APP_STAGE/streamlit_app_v3.py` |
+| `evals/<schema>/*.yaml` | AI evaluation configs, copies of `@POSTMORTEM.<SCHEMA>.EVAL_STAGE` (`results/`, `live/`, `explorer/`) |
+| `evals/eval_datasets.sql` | `INSERT`s for the eval question sets (`EVAL_POSTMORTEM_ANALYST`, `EVAL_LIVE_SANITY`, `EVAL_EXPLORER`) |
+
+The app source and eval YAMLs are byte-for-byte copies of stage files: refresh them from the stage, don't
+edit them here. A plain `SELECT` from a stage drops trailing commas (CSV parsing), so reading a file exactly
+needs a read-only anonymous Python procedure (`SnowflakeFile.open`). That is a `CALL`: ask first.
 
 To find an object's DDL, go straight to its path, e.g. `RESULTS/views/ERRORS.sql`.
 
