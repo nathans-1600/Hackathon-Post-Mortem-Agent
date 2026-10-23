@@ -100,3 +100,6 @@ EXECUTE IMMEDIATE FROM './LIVE/semantic_views/LIVE_SV.sql';
 -- Agents
 EXECUTE IMMEDIATE FROM './RESULTS/agents/POSTMORTEM_ANALYST.sql';
 EXECUTE IMMEDIATE FROM './LIVE/agents/LIVE_SANITY_AGENT.sql';
+
+-- Streamlit app. Upload streamlit/streamlit_app_v3.py to @POSTMORTEM.APP.APP_STAGE first (PUT, see the file header).
+EXECUTE IMMEDIATE FROM './APP/streamlits/POSTMORTEM_APP.sql';

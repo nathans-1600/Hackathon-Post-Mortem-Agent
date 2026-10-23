@@ -1,0 +1,11 @@
+# Cortex Analyst evaluation: sql_correctness on PM_ALL_SV's verified queries (the merged agent's results_analyst).
+evaluation:
+  analyst_params:
+    analyst_name: "POSTMORTEM.RESULTS.PM_ALL_SV"
+    analyst_type: "SEMANTIC VIEW"
+  source_metadata:
+    type: "verified_queries"
+
+metrics:
+  - "sql_correctness"
+
