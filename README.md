@@ -176,31 +176,38 @@ only the survivors shape the next forecast.
 
 ## Repository layout and run order
 
-Run the scripts in `sql/` in order, as a role that can create databases (the source objects are owned by
-`SYSADMIN`).
+Every object has its own file, `sql/<SCHEMA>/<type>/<NAME>.sql`, and each file opens with a header saying
+what the object is, what it uses, what writes to it, and any known gaps. **[sql/README.md](sql/README.md)
+lists every object with its description.**
 
-| Script | Contents |
-|---|---|
-| [`sql/00_setup.sql`](sql/00_setup.sql) | Warehouse `PM_WH`, database, schemas, stages |
-| [`sql/01_masked.sql`](sql/01_masked.sql) | `MASKED` tables, `PIT_PACKET`, `CLONE_CONTEXT` |
-| [`sql/02_outcomes.sql`](sql/02_outcomes.sql) | `OUTCOMES.ACTUALS_REL` |
-| [`sql/03_results_tables.sql`](sql/03_results_tables.sql) | `RESULTS` tables, rule-id sequence |
-| [`sql/04_results_views.sql`](sql/04_results_views.sql) | `RESULTS` views (dependency order) |
-| [`sql/05_results_procedures.sql`](sql/05_results_procedures.sql) | `SP_REPLAY`, `SP_POSTMORTEM`, `SP_LEARN_EXTRACT`, `SP_LEARN_PLAYBOOK` |
-| [`sql/06_explorer.sql`](sql/06_explorer.sql) | `EXPLORER.EVAL_EXPLORER` (evaluation data only) |
-| [`sql/07_live.sql`](sql/07_live.sql) | `LIVE` tables, views, functions, `SP_LIVE_REPLAY`, `SP_LIVE_SANITY`, `SP_LIVE_SANITY_TOOL` |
-| [`sql/08_search_services.sql`](sql/08_search_services.sql) | Three Cortex Search services |
-| [`sql/09_semantic_views.sql`](sql/09_semantic_views.sql) | `PM_ALL_SV` (backtest), `LIVE_SV` (live case) |
-| [`sql/10_agents.sql`](sql/10_agents.sql) | `POSTMORTEM_ANALYST`, `LIVE_SANITY_AGENT` |
+```
+sql/
+  deploy.sql          run order for a fresh account
+  README.md           index of every object
+  00_setup/           warehouse, database and schemas, stages
+  MASKED/             tables (9), file_formats, functions (PIT_PACKET, CLONE_CONTEXT)
+  OUTCOMES/           tables (ACTUALS_REL)
+  RESULTS/            sequences, tables (11), views (13), procedures (4),
+                      search_services (2), semantic_views (PM_ALL_SV), agents (POSTMORTEM_ANALYST)
+  EXPLORER/           tables (EVAL_EXPLORER)
+  LIVE/               tables (12), views (5), file_formats, functions (2), procedures (3),
+                      search_services, semantic_views (LIVE_SV), agents (LIVE_SANITY_AGENT)
+```
 
-**Warning:** the table scripts use `CREATE OR REPLACE TABLE`, which drops existing data. Run them on a fresh
-database, not on top of a populated one.
+To build the database on a fresh account, run [`sql/deploy.sql`](sql/deploy.sql) as a role that can create
+databases (the source objects are owned by `SYSADMIN`). It lists every file in dependency order with
+`EXECUTE IMMEDIATE FROM`, whose relative paths only resolve when `deploy.sql` itself runs from a stage or a
+Snowflake Git repository clone, e.g. `EXECUTE IMMEDIATE FROM @<git_repo>/branches/main/sql/deploy.sql`.
+Otherwise, run the files it lists one by one, in that order.
+
+**Warning:** the table files use `CREATE OR REPLACE TABLE`, which drops existing data. Run them (and
+`deploy.sql`) on a fresh database, never on top of a populated one.
 
 ## What is not included
 
 - **Data.** This is DDL only. The tables are created empty, and the views, search services and agents need
   data before they are useful.
-- **Warehouse and stage details.** `GET_DDL` cannot export these, so `00_setup.sql` is reconstructed from
+- **Warehouse and stage details.** `GET_DDL` cannot export these, so `00_setup/` is reconstructed from
   `SHOW WAREHOUSES` / `SHOW STAGES` (size, auto-suspend, stage encryption). The source warehouse is a Gen2
   standard warehouse; set that if your account supports it.
 - **Grants and ownership.** Everything is owned by `SYSADMIN` on the source, and no grants were exported.
@@ -215,16 +222,17 @@ database, not on top of a populated one.
   `POSTMORTEM.OUTCOMES.ACTUALS`, which do not exist, so those modes cannot run. `SP_REPLAY` in `live` mode also
   calls `RESULTS.PRIOR_RUNS()`, which does not exist; live runs use `LIVE.SP_LIVE_REPLAY` instead.
 - `MASKED.HOUSE_FRAMEWORK` is empty on the source, so `clone` mode has no house-process text.
-- Comments in some procedure bodies refer to script numbers (07, 08, 09, 11) from an earlier layout of this
+- Comments in some procedure bodies refer to script numbers (07, 08, 09, 11) from earlier layouts of this
   project.
 - `RESULTS.FORECASTS` and the agent text use the literal source label `parnassus` for the firm's own
   projections.
 
 ## Verification
 
-- Every statement in `01` to `09` was compared with `GET_DDL` output from the source account using a
-  whitespace-normalised SHA-256: 71 of 71 were identical, and every exported object appears exactly once.
-- Each agent YAML in `10_agents.sql` (2 agents) parses to the same JSON as the spec stored on the source
-  account.
+- Every object file except the agents (71) was compared with `GET_DDL` output from the source account using
+  a whitespace-normalised SHA-256: 71 of 71 were identical, and every exported object has exactly one file.
+- Each agent's YAML (2 agents) parses to the same JSON as the spec stored on the source account.
+- `deploy.sql` lists every file once, and no file uses an object listed after it.
 - **Not verified:** the scripts have not been run against an empty account, so syntax that depends on your
-  account's features (Cortex Agents, semantic views, search services, `AI_COMPLETE` model access) is untested.
+  account's features (Cortex Agents, semantic views, search services, `AI_COMPLETE` model access) is untested,
+  and so is `deploy.sql`.

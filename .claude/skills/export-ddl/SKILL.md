@@ -32,8 +32,8 @@ SHOW STAGES IN DATABASE POSTMORTEM;
 SHOW WAREHOUSES LIKE 'PM_WH';
 ```
 
-List what the repo has: every `create or replace` / `CREATE OR REPLACE` / `CREATE ... IF NOT EXISTS`
-statement in `sql/*.sql`. Report to the user before writing anything: objects **added** in Snowflake, objects
+List what the repo has: the object files `sql/<SCHEMA>/<type>/<NAME>.sql` (one statement each), plus the
+hand-written `sql/00_setup/*.sql`. Report to the user before writing anything: objects **added** in Snowflake, objects
 **removed** from Snowflake, and objects in both. Removed objects get deleted from the scripts; confirm that
 with the user, since a removal can be a mistake on the Snowflake side.
 
@@ -42,7 +42,8 @@ agent observability), the one-off `RESULTS.AGENT_SPEC_BACKUP` table, and the emp
 
 Fastest diff: `GET_DDL` needs constant arguments, so build one `UNION ALL` query with a row per object that
 returns `sha2(trim(rtrim(trim(regexp_replace(GET_DDL(...), '[[:space:]]+', ' ')), ';')))`, and hash each
-file statement the same way locally (split on `;` outside quotes, `$$` blocks and `--` comments). Objects
+file's statement the same way locally (drop the `--` header, i.e. split on `;` outside quotes, `$$` blocks and
+`--` comments). Objects
 whose hashes match need no work; only changed and added objects need their DDL pulled in full.
 
 Snowflake may be changing while you export (another session rebuilding an object). Check `created_on` /
@@ -62,29 +63,40 @@ Snowflake may be changing while you export (another session rebuilding an object
 | Agent | `DESCRIBE AGENT POSTMORTEM.<S>.<NAME>`: use `comment`, `profile` and `agent_spec` (JSON) |
 | Warehouse, stage | Not supported by `GET_DDL`. Rebuild from `SHOW WAREHOUSES` / `SHOW STAGES` (size, auto-suspend, auto-resume, stage encryption type) |
 
-## 3. Place each statement
+## 3. Write one file per object
 
-| Goes in | What |
-|---|---|
-| `sql/00_setup.sql` | Warehouse, database, schemas, stages (hand-written `IF NOT EXISTS`, from `SHOW`) |
-| `sql/01_masked.sql` | Everything in `MASKED` |
-| `sql/02_outcomes.sql` | Everything in `OUTCOMES` |
-| `sql/03_results_tables.sql` | `RESULTS` sequences and tables |
-| `sql/04_results_views.sql` | `RESULTS` views |
-| `sql/05_results_procedures.sql` | `RESULTS` procedures (and functions, if any appear) |
-| `sql/06_explorer.sql` | Everything in `EXPLORER` except search services, semantic views, agents |
-| `sql/07_live.sql` | Everything in `LIVE` except search services, semantic views, agents |
-| `sql/08_search_services.sql` | All Cortex Search services |
-| `sql/09_semantic_views.sql` | All semantic views |
-| `sql/10_agents.sql` | All agents |
+Each object gets its own file: `sql/<SCHEMA>/<type>/<NAME>.sql`, where `<type>` is one of `tables`,
+`sequences`, `file_formats`, `functions`, `views`, `procedures`, `search_services`, `semantic_views`, `agents`,
+and `<NAME>` is the object name as `SHOW` returns it. Warehouse, database, schemas and stages live in the
+hand-written `sql/00_setup/` files (`warehouse.sql`, `database_and_schemas.sql`, `stages.sql`), rebuilt from `SHOW`.
 
-Within a file: tables and sequences first, then views, file formats, functions, procedures.
+Each object file is a `--` header, a blank line, then the statement:
+
+```sql
+-- POSTMORTEM.<SCHEMA>.<NAME> (<type>)
+-- <What the object is for, in a sentence or two. Write it for a newcomer: what it holds or does, not how.>
+--
+-- Uses: <objects it references; same-schema names unqualified, others SCHEMA.NAME>
+-- Writes: <tables it inserts into, updates or deletes from (procedures)>
+-- Written by: <procedures that write it (tables)>
+--
+-- <Known gaps, warnings. Tables: "WARNING: CREATE OR REPLACE TABLE drops existing data. Run only on a
+--  fresh, empty database." Procedures that call AI_COMPLETE: "A CALL runs AI_COMPLETE (costs credits) and
+--  writes rows.">
+<statement>
+```
+
+- Omit `Uses` / `Writes` / `Written by` lines that would be empty. Derive them from the statement text
+  (every `POSTMORTEM.<S>.<N>` it mentions; `INSERT INTO` / `UPDATE` / `DELETE FROM` targets), not from memory.
+- **Changed object:** replace only the statement; keep the header's description and notes, and refresh the
+  `Uses` / `Writes` / `Written by` lines (other files' `Written by` lines too, if a procedure's writes changed).
+- **New object:** write a description from what the DDL does (read the body; don't guess). Masking rules apply.
+- **Removed object:** delete its file, its `deploy.sql` line and its `sql/README.md` row, and drop it from
+  other files' header lines.
 
 Rules:
 
 - Keep `GET_DDL` text verbatim. Don't reformat, re-case or re-indent: step 4 compares by hash.
-- **Views in dependency order.** `GET_DDL` returns them alphabetically, which fails on a fresh account. A view
-  goes after every view it reads; check each view's `FROM` / `JOIN` targets.
 - **Semantic views:** with the `TRUE` flag `GET_DDL` returns the name schema-qualified. If an account ever
   returns it unqualified, qualify it (`POSTMORTEM.<S>.PM_SV`); that is the only edit allowed.
 - **Agents:** write the `agent_spec` JSON as YAML in this form, matching the existing entries. Generate the YAML
@@ -101,27 +113,35 @@ Rules:
   $$;
   ```
 
-- Keep each file's `--` header. Update it if the file's contents or dependencies change. Keep the
-  existing known-gap notes; don't fix the gaps themselves.
-- If a whole category disappears (e.g. no objects left for a file), tell the user rather than deleting the
-  file on your own.
+- Keep the existing known-gap notes in headers; don't fix the gaps themselves.
+
+Then update the two indexes:
+
+- **`sql/deploy.sql`**: one `EXECUTE IMMEDIATE FROM './<path>';` line per file, setup first. Order: tables,
+  sequences and file formats; then functions and views; procedures; search services; semantic views; agents.
+  Within that, every object must come after everything in its `Uses` line (views in particular: `GET_DDL`
+  alphabetical order fails on a fresh account). Procedures may reference objects that don't exist (known
+  gaps); those don't affect the order.
+- **`sql/README.md`**: one row per object in its schema's table (object link, type, the header description).
 
 ## 4. Verify
 
-- **Statements:** for every statement in `01`-`09`, normalise whitespace (collapse every run of whitespace to
+- **Statements:** for every object file except agents, normalise whitespace (collapse every run of whitespace to
   one space, trim, drop the trailing `;`) in both the file's statement and the `GET_DDL` output, then compare
   SHA-256 hashes. Every statement must match; report the count (`n of n identical`).
 - **Agents:** parse each YAML block and compare it as JSON (key order ignored) with `agent_spec` from
   `DESCRIBE AGENT`. Comment and profile must match too. To check the JSON you parse against is exact, hash it
   against Snowflake's: `EXECUTE IMMEDIATE $$ BEGIN DESCRIBE AGENT ...; LET rs RESULTSET := (SELECT
   sha2("agent_spec") FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()))); RETURN TABLE(rs); END; $$`.
-- **Coverage:** every object from step 1 (minus the skipped ones) appears exactly once in the scripts.
+- **Coverage:** every object from step 1 (minus the skipped ones) has exactly one file, each file holds exactly
+  one statement, and every file is listed exactly once in `deploy.sql` and `sql/README.md`.
+- **Order:** walking `deploy.sql` top to bottom, no file uses an object that comes later.
 
 If anything fails, fix the file and re-check. Don't loosen the comparison.
 
 ## 5. Update docs, then stop
 
-- Update `README.md` (the layout table, the export date, the Verification section's counts) and the
-  layout table in `AGENTS.md` if objects were added or removed.
+- Update `README.md` (the export date, the Verification section's counts, and the object lists if objects
+  were added or removed) and `AGENTS.md` if the layout or a safety-relevant object changed.
 - Show the user a summary: objects added, removed and changed, and the verification counts.
 - Commit only when the user asks. Never push without being asked.

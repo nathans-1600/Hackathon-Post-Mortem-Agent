@@ -1,0 +1,24 @@
+-- POSTMORTEM.RESULTS.EVAL_REF (table)
+-- Snapshot of reference numbers (best source, Firm_X and guidance error, biggest miss, top tags) used to
+-- build evaluation ground truth.
+--
+-- WARNING: CREATE OR REPLACE TABLE drops existing data. Run only on a fresh, empty database.
+
+create or replace TABLE POSTMORTEM.RESULTS.EVAL_REF (
+	BUILT_AT TIMESTAMP_LTZ(9),
+	BEST_SOURCE VARCHAR(16777216),
+	BEST_ABS FLOAT,
+	BEST_N NUMBER(18,0),
+	FIRM_X_MEAN FLOAT,
+	FIRM_X_N NUMBER(18,0),
+	GUIDE_MEAN FLOAT,
+	GUIDE_ABS FLOAT,
+	GUIDE_N NUMBER(18,0),
+	CLAUDE_48_MEAN FLOAT,
+	CLAUDE_48_N NUMBER(18,0),
+	CLONE_VS_INDEP VARCHAR(16777216),
+	BIG_MISS_DK VARCHAR(16777216),
+	BIG_MISS_ERR FLOAT,
+	TOP_TAG VARCHAR(16777216),
+	TOP_FIRM_X_TAG VARCHAR(16777216)
+);
