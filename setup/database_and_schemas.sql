@@ -14,5 +14,6 @@ CREATE SCHEMA IF NOT EXISTS POSTMORTEM.RESULTS;
 CREATE SCHEMA IF NOT EXISTS POSTMORTEM.EXPLORER;
 -- The live (no outcome yet) sanity-check case
 CREATE SCHEMA IF NOT EXISTS POSTMORTEM.LIVE;
--- The Streamlit in Snowflake app and its source stage
-CREATE SCHEMA IF NOT EXISTS POSTMORTEM.APP;
+-- The Streamlit app
+CREATE SCHEMA IF NOT EXISTS POSTMORTEM.APP
+  COMMENT = 'Streamlit app: masked post-mortem results, learnings and the live sanity check (read-only)';

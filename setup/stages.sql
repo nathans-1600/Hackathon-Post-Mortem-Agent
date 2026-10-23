@@ -12,7 +12,7 @@ CREATE STAGE IF NOT EXISTS POSTMORTEM.LIVE.LIVE_STAGE
 CREATE STAGE IF NOT EXISTS POSTMORTEM.MASKED.IMPORT_STAGE
   ENCRYPTION = (TYPE = 'SNOWFLAKE_SSE');
 
--- Source files of the Streamlit app (streamlit/streamlit_app_v3.py). Also "INTERNAL NO CSE", with a
+-- Source files of the Streamlit app (streamlit/streamlit_app_v9.py). Also "INTERNAL NO CSE", with a
 -- directory table enabled.
 CREATE STAGE IF NOT EXISTS POSTMORTEM.APP.APP_STAGE
   ENCRYPTION = (TYPE = 'SNOWFLAKE_SSE')

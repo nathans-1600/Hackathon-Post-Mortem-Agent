@@ -252,7 +252,7 @@ Snowflake is the source of truth; these files are its export
 <summary><b>📦 Not included, known gaps, verification</b></summary>
 
 **Not included:** data (except the eval question sets), grants, auto-generated observability objects,
-`RESULTS.AGENT_SPEC_BACKUP`, older app files on the stage, and the empty `RAW` and `PUBLIC` schemas. Warehouse
+`RESULTS.AGENT_SPEC_BACKUP` and `RESULTS.EVAL_POSTMORTEM_ANALYST_BAK_20261023` (one-off backups), older app files on the stage, and the empty `RAW` and `PUBLIC` schemas. Warehouse
 and stages in `setup/` are rebuilt from `SHOW`, since `GET_DDL` can't export them.
 
 **Known gaps (exported as-is):** the `named` and `live` modes of `SP_REPLAY` / `SP_POSTMORTEM` read objects
@@ -260,7 +260,7 @@ that don't exist; `MASKED.HOUSE_FRAMEWORK` is empty, so clone mode has no house-
 refer to old script numbers; `RESULTS.FORECASTS` uses the label `parnassus` for the firm (the app shows
 `Firm_X`).
 
-**Verified:** all 71 non-agent object files match `GET_DDL` by hash; both agent specs match the stored JSON;
+**Verified:** all 74 non-agent object files match `GET_DDL` by hash; both agent specs match the stored JSON;
 the app source, eval YAMLs and question sets match Snowflake by MD5. Not yet run on an empty account.
 
 </details>

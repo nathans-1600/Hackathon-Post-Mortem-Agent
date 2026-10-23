@@ -13,6 +13,7 @@ Everything the backtest produces: replay runs, post-mortems and bias tags, learn
 | [`EVAL_REF`](EVAL_REF.sql) | Snapshot of reference numbers (best source, Firm_X and guidance error, biggest miss, top tags) used to build evaluation ground truth. |  |
 | [`LEARN_PLAYBOOKS`](LEARN_PLAYBOOKS.sql) | Playbooks: a set of rule ids and their text, by purpose (inner, outer_r1, outer_r2, all), never holding rules from the target or holdout case. | SP_LEARN_PLAYBOOK |
 | [`LEARN_RULES`](LEARN_RULES.sql) | Rules learned from post-mortems: rule text, signal, direction, which years it applies to, the case it came from, and the hindsight-gate result (gate_ok, gate_hit). | SP_LEARN_EXTRACT |
+| [`PM_BRIEF`](PM_BRIEF.sql) | A plain-English brief for each backtest case: a headline, why Firm_X and Claude missed, fixes for next time, and what was only knowable afterwards. Opus 4.8 writes the brief from the masked post-mortem, scored errors and findings; the closest forecaster and Firm_X's rank are computed in SQL, not by the model. |  |
 | [`PM_REPORT_CHUNKS`](PM_REPORT_CHUNKS.sql) | Post-mortem report text split into sections and chunks; indexed by the PM_REPORT_SEARCH Cortex Search service. |  |
 | [`POSTMORTEMS`](POSTMORTEMS.sql) | Post-mortems: the parsed JSON (findings in three groups, bias tags, lessons, data checklist) and the raw model response, per case and mode. | SP_POSTMORTEM |
 | [`REPLAY_IMPORTS`](REPLAY_IMPORTS.sql) | Replay runs imported from another account, with the document checksum at export time; read by REPLAY_RUN_FRESH. |  |
@@ -20,6 +21,7 @@ Everything the backtest produces: replay runs, post-mortems and bias tags, learn
 
 ## Notes
 
+- **`PM_BRIEF`:** Read by APP.POSTMORTEM_APP, which shows it first on its "Where each went wrong" tab. No stored procedure in this database writes it.
 - **`REPLAY_IMPORTS`:** Empty on the source.
 
 Each file starts with a header (description, what it uses, what writes it). Full name of every object: `POSTMORTEM.RESULTS.<NAME>`. Back to the [repo README](../../README.md).
