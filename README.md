@@ -4,7 +4,11 @@
 (Snowflake x Anthropic).
 
 This repo holds the Snowflake DDL for the `POSTMORTEM` database that runs the project. It was exported from
-the live Snowflake account on 2026-10-23.
+the live Snowflake account on 2026-10-23 and re-exported the same day, after the agents were consolidated.
+
+The live database is the source of truth and these scripts are its export: change Snowflake first, then
+re-export (see [.claude/skills/export-ddl/SKILL.md](.claude/skills/export-ddl/SKILL.md)). Rules for AI agents
+working here, plus a glossary, are in [AGENTS.md](AGENTS.md) (Claude Code reads it through [CLAUDE.md](CLAUDE.md)).
 
 ## The problem
 
@@ -152,8 +156,8 @@ The design is one database with four walls between its schemas:
 | `OUTCOMES` | Reported results, read only by scoring and post-mortems |
 | `RESULTS` | Replays, scores, post-mortems, rules and playbooks |
 
-Two more schemas sit on top: `EXPLORER` is a read-only surface for the Explorer agent, and `LIVE` holds the
-live sanity-check case.
+Two more schemas sit on top: `LIVE` holds the live sanity-check case, and `EXPLORER` keeps only the
+evaluation data of a retired Explorer agent.
 
 | Snowflake feature | What it does here |
 |---|---|
@@ -162,7 +166,8 @@ live sanity-check case.
 | Cortex Search, Cortex Analyst | Search the masked documents and ask questions about errors and bias tags |
 | Cortex Agents, AI evaluations | The post-mortem analyst and the sanity check, scored against ground truth |
 
-Three Cortex Agents sit on top: `POSTMORTEM_ANALYST`, `POSTMORTEM_EXPLORER` and `LIVE_SANITY_AGENT`.
+Two Cortex Agents sit on top: `POSTMORTEM_ANALYST` answers questions about both the backtest and the live
+case, and `LIVE_SANITY_AGENT` is a smaller agent for the live case only.
 
 **In one line:** every post-mortem becomes a rule, every rule must prove itself on cases it never saw, and
 only the survivors shape the next forecast.
@@ -182,11 +187,11 @@ Run the scripts in `sql/` in order, as a role that can create databases (the sou
 | [`sql/03_results_tables.sql`](sql/03_results_tables.sql) | `RESULTS` tables, rule-id sequence |
 | [`sql/04_results_views.sql`](sql/04_results_views.sql) | `RESULTS` views (dependency order) |
 | [`sql/05_results_procedures.sql`](sql/05_results_procedures.sql) | `SP_REPLAY`, `SP_POSTMORTEM`, `SP_LEARN_EXTRACT`, `SP_LEARN_PLAYBOOK` |
-| [`sql/06_explorer.sql`](sql/06_explorer.sql) | `EXPLORER` tables and views |
+| [`sql/06_explorer.sql`](sql/06_explorer.sql) | `EXPLORER.EVAL_EXPLORER` (evaluation data only) |
 | [`sql/07_live.sql`](sql/07_live.sql) | `LIVE` tables, views, functions, `SP_LIVE_REPLAY`, `SP_LIVE_SANITY`, `SP_LIVE_SANITY_TOOL` |
-| [`sql/08_search_services.sql`](sql/08_search_services.sql) | Four Cortex Search services |
-| [`sql/09_semantic_views.sql`](sql/09_semantic_views.sql) | `PM_SV`, `LEARN_SV`, `PM_EXPLORER_SV`, `LIVE_SV` |
-| [`sql/10_agents.sql`](sql/10_agents.sql) | `POSTMORTEM_ANALYST`, `POSTMORTEM_EXPLORER`, `LIVE_SANITY_AGENT` |
+| [`sql/08_search_services.sql`](sql/08_search_services.sql) | Three Cortex Search services |
+| [`sql/09_semantic_views.sql`](sql/09_semantic_views.sql) | `PM_ALL_SV` (backtest), `LIVE_SV` (live case) |
+| [`sql/10_agents.sql`](sql/10_agents.sql) | `POSTMORTEM_ANALYST`, `LIVE_SANITY_AGENT` |
 
 **Warning:** the table scripts use `CREATE OR REPLACE TABLE`, which drops existing data. Run them on a fresh
 database, not on top of a populated one.
@@ -199,8 +204,9 @@ database, not on top of a populated one.
   `SHOW WAREHOUSES` / `SHOW STAGES` (size, auto-suspend, stage encryption). The source warehouse is a Gen2
   standard warehouse; set that if your account supports it.
 - **Grants and ownership.** Everything is owned by `SYSADMIN` on the source, and no grants were exported.
-- **Auto-generated objects.** The `AI_OBS_OUTPUT_PARSER_*` functions and the `_PEP_YAML_READER` file format in
-  `EXPLORER` are created by Snowflake agent observability and are left out on purpose.
+- **Auto-generated objects.** The `AI_OBS_OUTPUT_PARSER_*` functions and the `_PEP_YAML_READER` file format are
+  created by Snowflake agent observability and are left out on purpose.
+- **`RESULTS.AGENT_SPEC_BACKUP`.** A one-off backup of agent specs taken before the agents were consolidated.
 - **`POSTMORTEM.RAW` and `PUBLIC` schemas.** Both are empty on the source.
 
 ## Known gaps in the source (exported as-is)
@@ -217,9 +223,8 @@ database, not on top of a populated one.
 ## Verification
 
 - Every statement in `01` to `09` was compared with `GET_DDL` output from the source account using a
-  whitespace-normalised SHA-256: 82 of 82 were identical. (Semantic view names are schema-qualified here, while
-  `GET_DDL` returns them unqualified; the comparison accounts for that.)
-- Each agent YAML in `10_agents.sql` parses to the same JSON as the spec stored on the source account (hash
-  match).
+  whitespace-normalised SHA-256: 71 of 71 were identical, and every exported object appears exactly once.
+- Each agent YAML in `10_agents.sql` (2 agents) parses to the same JSON as the spec stored on the source
+  account.
 - **Not verified:** the scripts have not been run against an empty account, so syntax that depends on your
   account's features (Cortex Agents, semantic views, search services, `AI_COMPLETE` model access) is untested.
