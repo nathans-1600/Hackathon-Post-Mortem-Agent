@@ -12,13 +12,13 @@
 
 **Parnassus Hackathon · Snowflake x Anthropic**
 
-[🧭 For everyone](#-for-everyone-what-we-built) · [🗺️ User flow](#️-user-flow) · [📊 Results](#-results-at-a-glance) · [✅ Evals](#-evaluations) · [📁 Repo layout](#-repository-layout-and-run-order)
+[🧭 What we built](#-what-we-built) · [🗺️ User flow](#️-user-flow) · [📊 Results](#-results-at-a-glance) · [✅ Evals](#-evaluations) · [📁 Repo layout](#-repository-layout-and-run-order)
 
 </div>
 
 ---
 
-## 🧭 For everyone: what we built
+## 🧭 What we built
 
 ### 😟 The problem
 
@@ -138,6 +138,9 @@ reasoning about them. So we hide everything it might recognise:
 | Dates | `D-30` (days before the review) |
 | Years | `FY0`, `FY+1`, `FY+2` |
 | Amounts | Scaled by a secret factor |
+
+**Masked documents:** sell-side notes, earnings-call transcripts, investor-conference transcripts, filings and
+Firm_X investment reviews (live case: sell-side notes, an earnings-call transcript and an annual-filing excerpt).
 
 Then we test the masking:
 
